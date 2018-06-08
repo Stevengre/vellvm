@@ -19,11 +19,13 @@ Record pc :=
   mk_pc {
       fn : function_id;
       bk : block_id;
-      pt : instr_id;
+      pt : nat;
     }.
 
+
+
 Instance string_of_pc : StringOf pc :=
-  fun p => "@" ++ (string_of (fn p)) ++ ":" ++ (string_of (bk p)) ++ ":" ++ (string_of (pt p)).
+  fun p => "@" ++ (string_of (fn p)) ++ ":" ++ (string_of (bk p)) ++ ":" ++ (string_of (Z.of_nat (pt p))).
 
 Require Import Equalities.
 Module PC <: UsualDecidableTypeFull.
@@ -81,58 +83,41 @@ Definition find_function (CFG : mcfg) (fid:function_id) : option (definition cfg
   find_map (find_defn fid) (m_definitions CFG).
 
 
-Definition fallthrough (cd: code) term_id : instr_id :=
-  match cd with
-  | [] => term_id
-  | (next, _)::_ => next
-  end.
-
-Definition blk_term_id b := fst (blk_term b).
-Definition blk_terminator b := snd (blk_term b).
-
-Definition blk_entry_id (b:block) : instr_id := fallthrough (blk_code b) (blk_term_id b). 
+(* Definition blk_term_id b := fst (blk_term b). *)
+(* Definition blk_terminator b := snd (blk_term b). *)
+(* Definition blk_entry_id (b:block) : instr_id := fallthrough (blk_code b) (blk_term_id b).  *)
 
 Definition blk_entry_pc (fid:function_id) (b:block) :=
-  mk_pc fid (blk_id b) (blk_entry_id b).
+  mk_pc fid (blk_id b) 0.
 
 Definition blk_term_pc (fid:function_id) (b:block) :=
-  mk_pc fid (blk_id b) (blk_term_id b).
+  mk_pc fid (blk_id b) (List.length (blk_code b)).
 
 Fixpoint find_block bs block_id : option block :=
   find (fun b => if (blk_id b) == block_id then true else false) bs.
 
-Fixpoint find_instr (cd : code) (p:instr_id) (t:instr_id) : option (cmd * option instr_id) :=
-  match cd with
-  | [] =>  None
-  | (x,i)::cd =>
-    if p == x then
-      Some (Inst i, Some (fallthrough cd t))
-    else
-      find_instr cd p t
-  end.
 
-Definition block_to_cmd (b:block) (iid:instr_id) : option (cmd * option instr_id) :=
-  let term_id := blk_term_id b in 
-  if term_id == iid then
-    Some (Term (snd (blk_term b)), None)
+Definition block_offset (b:block) (o:nat) : option (instr_id * cmd) :=
+  let l := List.length (blk_code b) in
+  if o <=? l then
+    '(iid, i) <- List.nth_error (blk_code b) o;
+    mret (iid, Inst i)
   else
-    find_instr (blk_code b) iid term_id 
-.
-               
-Definition fetch (CFG : mcfg) (p:pc) : option cmd :=
-  let 'mk_pc fid bid iid := p in 
+    if o =? l then
+      let '(iid, t) := (blk_term b) in
+      mret (iid, Term t)
+    else None.
+    
+Definition fetch (CFG : mcfg) (p:pc) : option (instr_id * cmd):=
+  let 'mk_pc fid bid offs := p in 
   'cfg <- find_function CFG fid;
   'blk <- find_block (blks (df_instrs cfg)) bid;
-  '(c, _) <- block_to_cmd blk iid;
-  mret c.
+  block_offset blk offs.
+
    
-Definition incr_pc (CFG:mcfg) (p:pc) : option pc :=
-  let 'mk_pc fid bid iid := p in 
-  'cfg <- find_function CFG fid;
-  'blk <- find_block (blks (df_instrs cfg)) bid;
-  '(c, n) <- block_to_cmd blk iid;
-  'iid_next <- n;
-  mret (mk_pc fid bid iid_next).
+Definition incr_pc (CFG:mcfg) (p:pc) : pc :=
+  let 'mk_pc fid bid offs := p in 
+  mk_pc fid bid (1+offs).
 
 Inductive block_entry : Set :=
 | BlockEntry (phis:list (local_id * phi)) (p:pc).
@@ -153,7 +138,7 @@ Definition find_function_entry (CFG:mcfg) (fid:function_id) : option function_en
   'dfn <- find_function CFG fid;
   let cfg := df_instrs dfn in
   'blk <- find_block (blks cfg) (init cfg);
-  mret (FunctionEntry (df_args dfn) (mk_pc fid (init cfg) (blk_entry_id blk))).  
+  mret (FunctionEntry (df_args dfn) (blk_entry_pc fid blk)).  
 
 
 (*

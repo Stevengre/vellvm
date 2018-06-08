@@ -421,8 +421,8 @@ Definition jump (fid:function_id) (bid_src:block_id) (bid_tgt:block_id) (g:genv)
 Definition step (s:state) : Trace result :=
   let '(g, pc, e, k) := s in
   let eval_exp top exp := eval_exp g e top exp in
-  
-  do cmd <- trywith ("CFG has no instruction at " ++ string_of pc) (fetch CFG pc);
+  do p <- trywith ("CFG has no instruction at " ++ string_of pc) (fetch CFG pc);
+  let '(iid, cmd) := p in
   match cmd with
   | Term (TERM_Ret (t, op)) =>
     'dv <- eval_exp (Some (eval_typ t)) op;
@@ -462,8 +462,8 @@ Definition step (s:state) : Trace result :=
   | Term (TERM_Invoke _ _ _ _) => raise_p pc "Unsupport LLVM terminator" 
 
   | Inst insn =>  (* instruction *)
-    do pc_next <- trywith "no fallthrough instruction" (incr_pc CFG pc);
-    match (pt pc), insn  with
+    let pc_next := incr_pc CFG pc in
+    match iid, insn  with
 
       | IId id, INSTR_Op op =>
          'dv <- eval_op g e op;     

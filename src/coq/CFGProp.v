@@ -17,16 +17,12 @@ Open Scope list_scope.
 
 (* invariants of the CFG machine -------------------------------------------- *)
 
-Lemma incr_pc_in_block: forall CFG p1 p2, incr_pc CFG p1 = Some p2 -> (fn p1 = fn p2) /\ (bk p1 = bk p2).
+Lemma incr_pc_in_block: forall CFG p1 p2, incr_pc CFG p1 = p2 -> (fn p1 = fn p2) /\ (bk p1 = bk p2).
 Proof.
   intros CFG p1 p2 H.
   unfold incr_pc in H.
-  destruct p1.
-  destruct (find_function CFG fn); simpl in H; try solve [inversion H].
-  destruct (find_block (blks (df_instrs d)) bk); simpl in H; try solve [inversion H].
-  destruct (block_to_cmd b pt); simpl in H; try solve [inversion H].
-  destruct p. destruct o; try inversion H.
-  simpl. split; reflexivity.
+  destruct p1. destruct p2.
+  inversion H. subst. simpl. auto.
 Qed.  
 
 Lemma find_block_same_fid : forall CFG fid br phis p,
@@ -43,7 +39,7 @@ Qed.
     
 
 (* syntactic structure ------------------------------------------------------ *)
-
+(*
 Inductive CFG_has_code_at (CFG:mcfg) (P:pc -> Prop) : pc -> code -> Prop :=
 | has_code_nil :
     forall p, P p -> CFG_has_code_at CFG P p []
@@ -138,7 +134,7 @@ Inductive CFG_fun_has_block (CFG:mcfg) (fid:function_id) (b:block) phis : Prop :
 
 Definition CFG_fun_has_blocks (CFG:mcfg) (fid:function_id) (bs:list block) : Prop :=
   Forall (fun b => exists phis, CFG_fun_has_block CFG fid b phis /\ CFG_fun_has_terminator_lbls CFG fid (snd (blk_term b))) bs.
-
+*)
 
 (* well formedness ---------------------------------------------------------- *)
 (*
