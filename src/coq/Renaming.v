@@ -453,7 +453,8 @@ Hint Unfold swap_of_dvalue.
 Instance swap_of_IO {X} : Swap (IO X) := fun id1 id2 x => x.
 Hint Unfold swap_of_IO.
 
-CoFixpoint swap_Trace X `{Swap X} (id1 id2:raw_id) (t:Trace X) : Trace X :=
+(*
+CoFixpoint swap_Trace X `{Swap X} (id1 id2:raw_id) t:=
   match t with
   | Trace.Ret x => Trace.Ret (swap id1 id2 x)
   | Trace.Vis _ e k => Trace.Vis (swap id1 id2 e) (fun y => swap_Trace X id1 id2 (k y))
@@ -463,7 +464,7 @@ CoFixpoint swap_Trace X `{Swap X} (id1 id2:raw_id) (t:Trace X) : Trace X :=
 
 Instance swap_of_Trace {X} `{SX : Swap X} : Swap (Trace X) := swap_Trace X.
 Hint Unfold swap_of_Trace.
-
+*)
 (* Parameter fold : forall A: Type, (key -> elt -> A -> A) -> t elt -> A -> A. *)
 Definition swap_ENV {X} `{SX : Swap X} (id1 id2:raw_id) (m:ENV.t X) : ENV.t X :=
   ENV.fold (fun k v n => ENV.add (swap id1 id2 k) (swap id1 id2 v) n) m (ENV.empty X).
@@ -619,7 +620,7 @@ Section PROOFS.
     destruct (eval_icmp icmp v1 v2); reflexivity.
   Qed.
 
-  
+(*  
   Lemma swap_raise {X} `{SX: Swap X} : forall s : string, (raise s : Trace X) = swap id1 id2 (raise s).
   Proof.
     intros s.
@@ -685,6 +686,6 @@ Section PROOFS.
     
     
   Admitted.    
-    
+*)    
 End PROOFS.  
 End RENAMING.

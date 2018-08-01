@@ -12,7 +12,10 @@ Import ListNotations.
 Set Implicit Arguments.
 Set Contextual Implicit.
 
-Module A : MemoryAddress.ADDRESS with Definition addr := (Z * Z) % type.
+Module IM := FMapAVL.Make(Coq.Structures.OrderedTypeEx.Z_as_OT).
+Definition IntMap := IM.t.
+
+Module A <: MemoryAddress.ADDRESS with Definition addr := (Z * Z) % type.
   Definition addr := (Z * Z) % type.
   Definition null := (0, 0).
   Definition t := addr.
@@ -26,17 +29,26 @@ Module A : MemoryAddress.ADDRESS with Definition addr := (Z * Z) % type.
     - right. intros H. inversion H; subst. apply n. reflexivity.
     - right. intros H. inversion H; subst. apply n. reflexivity.      
   Qed.
+
+  Inductive SByte :=
+  | Byte : byte -> SByte
+  | Ptr : addr -> SByte
+  | PtrFrag : SByte
+  | SUndef : SByte.
+
+  Definition mem_block := IntMap SByte.
+  Definition state := IntMap mem_block.
+
 End A.
 
 
 Module Make(LLVMIO: LLVM_INTERACTIONS(A)).
   Import LLVMIO.
   Import DV.
-  
-Definition addr := A.addr.
-
-Module IM := FMapAVL.Make(Coq.Structures.OrderedTypeEx.Z_as_OT).
-Definition IntMap := IM.t.
+  Hint Unfold T.
+  Hint Unfold LLVMIO.T.
+  Import A.
+  Definition memory := state.
 
 Definition add {a} k (v:a) := IM.add k v.
 Definition delete {a} k (m:IntMap a) := IM.remove k m.
@@ -72,14 +84,7 @@ Definition union {a} (m1 : IntMap a) (m2 : IntMap a)
 
 Definition size {a} (m : IM.t a) : Z := Z.of_nat (IM.cardinal m).
 
-Inductive SByte :=
-| Byte : byte -> SByte
-| Ptr : addr -> SByte
-| PtrFrag : SByte
-| SUndef : SByte.
 
-Definition mem_block := IntMap SByte.
-Definition memory := IntMap mem_block.
 Definition undef := DVALUE_Undef. (* TODO: should this be an empty block? *)
 
 Fixpoint max_default (l:list Z) (x:Z) :=
@@ -369,14 +374,39 @@ Definition handle_gep (t:dtyp) (dv:dvalue) (vs:list dvalue) (m:memory) : err (me
   | _ => raise "non-I32 index"
   end.
 
-Definition mem_step {X} (e:IO X) (m:memory) : err ((IO X) + (memory * X)) :=
+Check Alloca.
+
+Lemma foo : forall X, IO X -> exists Y, X = (LLVMIO.state * Y)%type.
+Proof.
+  intros X e.
+  destruct e; unfold T; eexists; reflexivity.
+Qed.
+
+Program Definition extIO : forall X, IO X -> Type.
+intros X e.
+inversion e; unfold T in *.
+exact dvalue.
+exact dvalue.
+exact unit.
+exact dvalue.
+exact dvalue.
+exact dvalue.
+exact dvalue.
+Defined.
+
+Program Definition project_state : forall X, IO X -> X -> LLVMIO.state.
+intros x e u.
+inversion e; unfold T in *; subst; exact (fst u).
+Defined.  
+
+Definition mem_step {X} (e:IO X) : err ((IO X) + X) :=
   match e with
-  | Alloca t =>
+  | Alloca m t => 
     let new_block := make_empty_block t in
-    mret (inr (add (size m) new_block m,
-               DVALUE_Addr (size m, 0)))
-         
-  | Load t dv => mret
+    inr (inr (add (size m) new_block m,
+              DVALUE_Addr (size m, 0)))
+        
+  | Load m t dv => mret
     match dv with
     | DVALUE_Addr a =>
       match a with
@@ -385,13 +415,13 @@ Definition mem_step {X} (e:IO X) (m:memory) : err ((IO X) + (memory * X)) :=
         | Some block =>
           inr (m,
                deserialize_sbytes (lookup_all_index i (sizeof_dtyp t) block SUndef) t)
-        | None => inl (Load t dv)
+        | None => inl (Load m t dv)
         end
       end
-    | _ => inl (Load t dv)
+    | _ => inl (Load m t dv)
     end 
 
-  | Store dv v => mret
+  | Store m dv v => mret
     match dv with
     | DVALUE_Addr a =>
       match a with
@@ -399,19 +429,19 @@ Definition mem_step {X} (e:IO X) (m:memory) : err ((IO X) + (memory * X)) :=
         match lookup b m with
         | Some m' =>
           inr (add b (add_all_index (serialize_dvalue v) i m') m, ()) 
-        | None => inl (Store dv v)
+        | None => inl (Store m dv v)
         end
       end
-    | _ => inl (Store dv v)
+    | _ => inl (Store m dv v)
     end
       
-  | GEP t dv vs =>
+  | GEP m t dv vs =>
     match handle_gep t dv vs m with
     | inl s => raise s
     | inr r => mret (inr r)
     end
 
-  | ItoP i =>
+  | ItoP m i =>
     match i with
     | DVALUE_I64 i => mret (inr (m, DVALUE_Addr (0, DynamicValues.Int64.unsigned i)))
     | DVALUE_I32 i => mret (inr (m, DVALUE_Addr (0, DynamicValues.Int32.unsigned i)))
@@ -420,7 +450,7 @@ Definition mem_step {X} (e:IO X) (m:memory) : err ((IO X) + (memory * X)) :=
     | _ => raise "Non integer passed to ItoP"
     end
     
-  | PtoI a =>
+  | PtoI m a =>
     match a with
     | DVALUE_Addr (b, i) =>
       if Z.eqb b 0 then mret (inr (m, DVALUE_Addr(0, i)))
@@ -429,25 +459,28 @@ Definition mem_step {X} (e:IO X) (m:memory) : err ((IO X) + (memory * X)) :=
     | _ => raise "Non pointer passed to PtoI"
     end
                        
-  | Call t f args  => mret (inl (Call t f args))
+  | Call m t f args  => mret (inl (Call m t f args))
   end.
 
 (*
  memory -> TraceLLVMIO () -> TraceX86IO () -> Prop
 *)
 
-CoFixpoint memD {X} (m:memory) (d:Trace X) : Trace X :=
-  match d with
-  | Trace.Tau d'            => Trace.Tau (memD m d')
-  | Trace.Vis _ io k =>
-    match mem_step io m with
-    | inr (inr (m', v)) => Trace.Tau (memD m' (k v))
+CoFixpoint memD {X} (d:Trace.M IO (LLVMIO.state * X)) : Trace.M IO (LLVMIO.state * X) := 
+  match d  with
+  | Trace.Tau d'            => Trace.Tau (memD d')
+  | Trace.Vis Y io k =>
+    match mem_step io with
+    | inr (inr u) => Trace.Tau (memD (k u))
     | inr (inl e) => Trace.Vis io k
     | inl s => Trace.Err s
     end
   | Trace.Ret x => d
   | Trace.Err x => d
   end.
+
+Definition memD' {X} (m:memory) (d:Trace X) : Trace.M IO (LLVMIO.state * X) :=
+  memD (d m).
 
 End Make.
 

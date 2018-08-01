@@ -20,13 +20,13 @@ Module SS := StepSemantics(Memory.A)(IO).
 Import IO.
 Export IO.DV.
 
-Definition run_with_memory prog : option (Trace DV.dvalue) :=
+Definition run_with_memory prog : option (Trace.M IO (state * DV.dvalue)) :=
   let scfg := Vellvm.AstLib.modul_of_toplevel_entities prog in
   match CFG.mcfg_of_modul scfg with
   | None => None
   | Some mcfg =>
     mret
-      (M.memD M.empty
+      (M.memD' M.empty
       ('s <- SS.init_state mcfg "main";
          SS.step_sem mcfg (SS.Step s)))
   end.

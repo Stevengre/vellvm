@@ -58,7 +58,7 @@ let pp_test_of_dir dir =
   Test ("Parsing files in: " ^ dir,
         List.map (fun f -> (f, fun () -> parse_pp_test f)) (files_of_dir dir))
 
-let run_dvalue_test (test:IO.DV.dvalue -> bool) path =
+let run_dvalue_test (test:TopLevel.IO.state*IO.DV.dvalue -> bool) path =
   if not (test (run_ll_file path)) then failwith (path ^ " test failed"); ()
 
 let poison_tests =
@@ -146,30 +146,30 @@ let test_dirs =
    "../tests/llvm-arith/i32/";
    "../tests/llvm-arith/i64/"]
 
-let poison_test = function
+let poison_test (_, v) = match v with
   | IO.DV.DVALUE_Poison -> true
   | _ -> false
 
-let undef_test = function
+let undef_test (_, v) = match v with
   | IO.DV.DVALUE_Undef -> true
   | _ -> false
 
-let i1_test (i1:int1) = function
+let i1_test (i1:int1) (_,v) = match v with
   | IO.DV.DVALUE_I1 i2 ->
      Int1.eq i1 i2
   | _ -> false
 
-let i8_test (i1:int8) = function
+let i8_test (i1:int8) (_, v) = match v with
   | IO.DV.DVALUE_I1 i2 ->
      Int8.eq i1 i2
   | _ -> false
 
-let i32_test (i1:int32) = function
+let i32_test (i1:int32) (_, v) = match v with
   | IO.DV.DVALUE_I32 i2 ->
      Int32.eq i1 i2
   | _ -> false
 
-let i64_test (i1:int64) = function
+let i64_test (i1:int64) (_, v) = match v with
   | IO.DV.DVALUE_I64 i2 ->
      Int64.eq i1 i2
   | _ -> false

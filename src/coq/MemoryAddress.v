@@ -15,5 +15,6 @@ Module Type ADDRESS.
   Parameter addr : Set.
   Parameter null : addr.
   Parameter addr_dec : forall (a b : addr), {a = b} + {a <> b}.
+  Parameter state : Type.
 End ADDRESS.
 
