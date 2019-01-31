@@ -39,6 +39,9 @@ Module A <: MemoryAddress.ADDRESS with Definition addr := (Z * Z) % type.
   Definition mem_block := IntMap SByte.
   Definition state := IntMap mem_block.
 
+  Definition P := option.
+  Definition fp := option_functor.
+  Definition mp := option_monad.
 End A.
 
 

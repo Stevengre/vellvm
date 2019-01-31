@@ -16,5 +16,8 @@ Module Type ADDRESS.
   Parameter null : addr.
   Parameter addr_dec : forall (a b : addr), {a = b} + {a <> b}.
   Parameter state : Type.
+  Parameter P : Type -> Type.
+  Parameter fp : (@Functor P).
+  Parameter mp : (@Monad P fp).
 End ADDRESS.
 
